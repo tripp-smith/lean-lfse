@@ -1,0 +1,9 @@
+/.lake/
+/build/
+/.lake-pack/
+*.olean
+*.ilean
+*.trace
+*.dot
+.DS_Store
+Handoff_Report.tmp

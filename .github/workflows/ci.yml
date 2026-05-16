@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          build: true
+          test: true
+      - name: CLI smoke
+        run: |
+          lake exe lfse -- eval examples/BermudanOption.lean --scenario base --format json
+          lake exe lfse -- trace examples/BermudanOption.lean --trace-level 2
+          lake run benchmarks
