@@ -229,9 +229,8 @@ It adds `remainingAfterWaterfall`, `waterfallCashTotal`, and
 `waterfallConservesCash` for checking that paid cash plus residual cash matches
 input cash on concrete waterfall allocations.
 
-The current waterfall runtime uses IEEE `Float`, so LFSE does not claim an
-unsound universal algebraic equality over all Float values. Structural edge
-cases are theorem-backed, and concrete financial cases are verified with
+The current waterfall runtime uses IEEE `Float`, so exact universal equality is
+not sound for the runtime type itself. Concrete Float cases are verified with
 `#guard`, `native_decide`, and runtime tolerance tests:
 
 ```lean
@@ -248,6 +247,25 @@ def tranches : List Tranche := [
 example :
     waterfallConservesCash 90.0 tranches = true := by
   native_decide
+```
+
+For a true parametric proof, the `Waterfall.Theory.Exact` namespace provides a
+generic exact-cash model and proves paid cash plus residual cash equals original
+cash for every tranche list:
+
+```lean
+import LFSEFinance
+
+open LFSE.Finance.Waterfall.Theory
+
+def exactTranches : List (Exact.Tranche Rat) := [
+  { name := "senior", balance := (100 : Rat), rate := (1 : Rat) },
+  { name := "mezz", balance := (50 : Rat), rate := (1 : Rat) }
+]
+
+example (cash : Rat) :
+    Exact.waterfallCashTotal cash exactTranches = cash := by
+  simpa using Exact.waterfallCashTotal_eq_cash cash exactTranches
 ```
 
 Focused checks:

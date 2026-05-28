@@ -1,8 +1,9 @@
 # Waterfall Theory
 
-`LFSE.Finance.Waterfall.Theory` contains executable conservation checks and
-theorem-backed edge-case lemmas for the waterfall allocator in
-`LFSE.Finance.Waterfall`.
+`LFSE.Finance.Waterfall.Theory` contains two related verification surfaces for
+the waterfall allocator in `LFSE.Finance.Waterfall`: executable checks for the
+Float runtime API, and a generic exact model with a true parametric conservation
+theorem.
 
 The runtime API returns `List Payment`, not a list of raw cash amounts, and a
 waterfall may leave residual cash when inflow exceeds tranche dues. The checked
@@ -13,12 +14,21 @@ paymentsTotal (allocateWaterfall inflow tranches) +
   remainingAfterWaterfall inflow tranches == inflow
 ```
 
-For arbitrary IEEE `Float` values, the exact parametric equality form requested
-by `spec.v3.md` is not a sound theorem: floating-point addition and subtraction
-do not form the algebra needed for a universal proof. The module therefore keeps
-the production API honest: use theorem-backed edge cases for structural facts,
-and use `#guard` / `native_decide` or runtime tolerance checks for concrete
-Float allocations.
+For arbitrary IEEE `Float` values, exact universal equality is not sound:
+floating-point addition and subtraction do not form the algebra needed for a
+parametric theorem. The Float-facing helpers therefore use `#guard`,
+`native_decide`, or runtime tolerance checks for concrete allocations.
+
+The `Exact` namespace provides a separate generic model for exact cash domains.
+It proves:
+
+```lean
+Exact.paymentsTotal (Exact.allocateWaterfall cash tranches) +
+  Exact.remainingAfterWaterfall cash tranches = cash
+```
+
+for any type with an `Exact.ExactCash` instance, including the provided `Int` and
+`Rat` instances.
 
 ## Public API
 
@@ -32,6 +42,9 @@ Float allocations.
 - `waterfall_empty`, `remainingAfterWaterfall_empty`, and
   `waterfall_zero_cash_single_tranche_payment`: reusable edge-case invariants
   used by `LFSE.Verify.Proofs`.
+- `Exact.waterfallConservesCash`: generic parametric conservation theorem.
+- `Exact.waterfallCashTotal_eq_cash`: packaged equality for paid plus residual
+  exact cash.
 
 ## Example
 
@@ -49,6 +62,23 @@ def tranches : List Tranche := [
 example :
     waterfallConservesCash 90.0 tranches = true := by
   native_decide
+```
+
+Exact parametric theorem:
+
+```lean
+import LFSEFinance
+
+open LFSE.Finance.Waterfall.Theory
+
+def exactTranches : List (Exact.Tranche Rat) := [
+  { name := "senior", balance := (100 : Rat), rate := (1 : Rat) },
+  { name := "mezz", balance := (50 : Rat), rate := (1 : Rat) }
+]
+
+example (cash : Rat) :
+    Exact.waterfallCashTotal cash exactTranches = cash := by
+  simpa using Exact.waterfallCashTotal_eq_cash cash exactTranches
 ```
 
 Run the focused checks with:
