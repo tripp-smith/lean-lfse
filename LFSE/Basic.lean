@@ -31,6 +31,8 @@ structure TraceEvent where
   nodeId : Nat
   label : String
   value : Option Float := none
+  provenance : Option String := none
+  metadata : List (String × String) := []
   deriving Repr, BEq
 
 structure Result where
@@ -38,6 +40,7 @@ structure Result where
   npv : Float
   greeks : List (String × Float) := []
   trace : List TraceEvent := []
+  lineage : List String := []
   deriving Repr
 
 def escapeJson (s : String) : String :=
@@ -68,15 +71,27 @@ def TraceEvent.toJson (ev : TraceEvent) : String :=
     match ev.value with
     | some v => ",\"value\":" ++ toString v
     | none => ""
-  "{" ++ "\"nodeId\":" ++ toString ev.nodeId ++ ",\"label\":" ++ escapeJson ev.label ++ value ++ "}"
+  let provenance :=
+    match ev.provenance with
+    | some p => ",\"provenance\":" ++ escapeJson p
+    | none => ""
+  let metadata :=
+    if ev.metadata.isEmpty then ""
+    else
+      let pairs := ev.metadata.map (fun p => "{" ++ "\"key\":" ++ escapeJson p.fst ++ ",\"value\":" ++ escapeJson p.snd ++ "}")
+      ",\"metadata\":[" ++ String.intercalate "," pairs ++ "]"
+  "{" ++ "\"nodeId\":" ++ toString ev.nodeId ++ ",\"label\":" ++ escapeJson ev.label ++
+    value ++ provenance ++ metadata ++ "}"
 
 def Result.toJson (r : Result) : String :=
   let greeks := String.intercalate "," (r.greeks.map pairJson)
   let trace := String.intercalate "," (r.trace.map TraceEvent.toJson)
+  let lineage := String.intercalate "," (r.lineage.map escapeJson)
   "{" ++ "\"scenario\":" ++ escapeJson r.scenario ++
     ",\"npv\":" ++ toString r.npv ++
     ",\"greeks\":[" ++ greeks ++
-    "],\"trace\":[" ++ trace ++ "]}"
+    "],\"trace\":[" ++ trace ++
+    "],\"lineage\":[" ++ lineage ++ "]}"
 
 def Result.toYaml (r : Result) : String :=
   let greeks :=
@@ -85,6 +100,9 @@ def Result.toYaml (r : Result) : String :=
   let trace :=
     if r.trace.isEmpty then "trace: []\n"
     else "trace:\n" ++ String.intercalate "" (r.trace.map (fun ev => s!"  - nodeId: {ev.nodeId}\n    label: {ev.label}\n"))
-  s!"scenario: {r.scenario}\nnpv: {r.npv}\n{greeks}{trace}"
+  let lineage :=
+    if r.lineage.isEmpty then "lineage: []\n"
+    else "lineage:\n" ++ String.intercalate "" (r.lineage.map (fun item => s!"  - {item}\n"))
+  s!"scenario: {r.scenario}\nnpv: {r.npv}\n{greeks}{trace}{lineage}"
 
 end LFSE

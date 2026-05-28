@@ -1,12 +1,13 @@
 import Std.Data.HashMap
 import LFSE.LazyCore.Node
+import LFSE.LazyCore.Provenance
 
 namespace LFSE
 namespace LazyCore
 
 structure MemoCache where
   values : IO.Ref (Std.HashMap NodeId Float)
-  active : IO.Ref (List NodeId)
+  active : IO.Ref (Std.HashMap NodeId Unit)
   stats : IO.Ref EvalStats
   trace : IO.Ref (List TraceEvent)
 
@@ -30,14 +31,20 @@ def validateNodeIds (node : LazyNode) : LFSEExcept Unit :=
 def MemoCache.empty : IO MemoCache := do
   pure {
     values := ← IO.mkRef {}
-    active := ← IO.mkRef []
+    active := ← IO.mkRef {}
     stats := ← IO.mkRef {}
     trace := ← IO.mkRef []
   }
 
-def markTrace (cache : MemoCache) (node : LazyNode) (value : Float) : IO Unit := do
+def markTrace (cache : MemoCache) (node : LazyNode) (value : Float) (metadata : List (String × String) := []) : IO Unit := do
   let events ← cache.trace.get
-  cache.trace.set ({ nodeId := node.id, label := node.label, value := some value } :: events)
+  cache.trace.set ({
+    nodeId := node.id,
+    label := node.label,
+    value := some value,
+    provenance := some (nodeProvenanceHash node),
+    metadata := metadata
+  } :: events)
 
 def bumpForced (cache : MemoCache) : IO Unit := do
   let s ← cache.stats.get
@@ -47,7 +54,16 @@ def bumpHit (cache : MemoCache) : IO Unit := do
   let s ← cache.stats.get
   cache.stats.set { s with memoHits := s.memoHits + 1 }
 
-partial def forceWithFuel (fuel : Nat) (ctx : Context) (cache : MemoCache) (node : LazyNode) : IO (LFSEExcept Float) := do
+def bumpEffect (cache : MemoCache) : IO Unit := do
+  let s ← cache.stats.get
+  cache.stats.set { s with effectCalls := s.effectCalls + 1 }
+
+def noteDepth (cache : MemoCache) (depth : Nat) : IO Unit := do
+  let s ← cache.stats.get
+  cache.stats.set { s with maxDepth := max s.maxDepth depth }
+
+partial def forceWithFuelAt (fuel depth : Nat) (ctx : Context) (cache : MemoCache) (node : LazyNode) : IO (LFSEExcept Float) := do
+  noteDepth cache depth
   if fuel == 0 then
     pure (.error (.evaluationFailed "lazy evaluation exceeded recursion depth"))
   else
@@ -55,51 +71,56 @@ partial def forceWithFuel (fuel : Nat) (ctx : Context) (cache : MemoCache) (node
   match values.get? node.id with
   | some value =>
       bumpHit cache
+      markTrace cache node value [("cache", "hit")]
       pure (.ok value)
   | none =>
       let active ← cache.active.get
       if active.contains node.id then
         pure (.error (.cycleDetected node.id))
       else
-        cache.active.set (node.id :: active)
+        cache.active.set (active.insert node.id ())
         let finish (res : LFSEExcept Float) : IO (LFSEExcept Float) := do
           cache.active.set active
           match res with
           | .ok value =>
               cache.values.modify (fun m => m.insert node.id value)
               bumpForced cache
-              markTrace cache node value
+              markTrace cache node value [("cache", "miss")]
           | .error _ => pure ()
           pure res
         match node with
         | .const _ _ value => finish (.ok value)
         | .observable _ name => finish (ctx.lookup name)
         | .effect _ _ action =>
+            bumpEffect cache
             let value ← action
             finish (.ok value)
         | .unary _ _ f child =>
-            match ← forceWithFuel (fuel - 1) ctx cache child with
+            match ← forceWithFuelAt (fuel - 1) (depth + 1) ctx cache child with
             | .ok value => finish (.ok (f value))
             | .error err => finish (.error err)
         | .binary _ _ f left right =>
-            match ← forceWithFuel (fuel - 1) ctx cache left with
+            match ← forceWithFuelAt (fuel - 1) (depth + 1) ctx cache left with
             | .error err => finish (.error err)
             | .ok lv =>
-                match ← forceWithFuel (fuel - 1) ctx cache right with
+                match ← forceWithFuelAt (fuel - 1) (depth + 1) ctx cache right with
                 | .ok rv => finish (.ok (f lv rv))
                 | .error err => finish (.error err)
         | .branch _ _ cond yes no =>
-            match ← forceWithFuel (fuel - 1) ctx cache cond with
+            match ← forceWithFuelAt (fuel - 1) (depth + 1) ctx cache cond with
             | .error err => finish (.error err)
             | .ok cv =>
                 if cv != 0.0 then
-                  match ← forceWithFuel (fuel - 1) ctx cache yes with
+                  match ← forceWithFuelAt (fuel - 1) (depth + 1) ctx cache yes with
                   | .ok value => finish (.ok value)
                   | .error err => finish (.error err)
                 else
-                  match ← forceWithFuel (fuel - 1) ctx cache no with
+                  match ← forceWithFuelAt (fuel - 1) (depth + 1) ctx cache no with
                   | .ok value => finish (.ok value)
                   | .error err => finish (.error err)
+
+def forceWithFuel (fuel : Nat) (ctx : Context) (cache : MemoCache) (node : LazyNode) : IO (LFSEExcept Float) :=
+  forceWithFuelAt fuel 0 ctx cache node
 
 def forceWith (ctx : Context) (cache : MemoCache) (node : LazyNode) : IO (LFSEExcept Float) :=
   forceWithFuel 100000 ctx cache node

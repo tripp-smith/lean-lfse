@@ -9,6 +9,10 @@ inductive LFSEError where
   | evaluationFailed (message : String)
   | cliError (message : String)
   | dataError (message : String)
+  | registryError (message : String)
+  | configError (message : String)
+  | securityError (message : String)
+  | serverError (message : String)
   deriving Repr, BEq, Inhabited
 
 def LFSEError.message : LFSEError → String
@@ -21,6 +25,10 @@ def LFSEError.message : LFSEError → String
   | .evaluationFailed message => s!"evaluation failed: {message}"
   | .cliError message => s!"cli error: {message}"
   | .dataError message => s!"data error: {message}"
+  | .registryError message => s!"registry error: {message}"
+  | .configError message => s!"config error: {message}"
+  | .securityError message => s!"security error: {message}"
+  | .serverError message => s!"server error: {message}"
 
 instance : ToString LFSEError where
   toString := LFSEError.message

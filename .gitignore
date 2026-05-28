@@ -7,3 +7,9 @@
 *.dot
 .DS_Store
 Handoff_Report.tmp
+python/.pytest_cache/
+python/build/
+python/dist/
+python/*.egg-info/
+*.pyc
+__pycache__/

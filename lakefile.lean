@@ -2,18 +2,33 @@ import Lake
 open Lake DSL
 
 package «lean-lfse» where
-  version := v!"0.1.0"
+  version := v!"2.1.0"
   keywords := #["finance", "lazy", "scenario", "monte-carlo", "dsl"]
   description := "Lazy Financial Scenario Engine for verifiable financial scenario evaluation in Lean 4"
   license := "MIT"
   readmeFile := "README.md"
 
 require leancontracts from git
-  "git@github.com:tripp-smith/leancontracts.git" @ "b9fc2e85897774decd01126f1b2e6a943adabd91"
+  "https://github.com/tripp-smith/leancontracts.git" @ "b9fc2e85897774decd01126f1b2e6a943adabd91"
 require columnar from git
-  "git@github.com:tripp-smith/lean-columnar.git" @ "788a42222d0112f3fab43f96825ac14a2297e4da"
+  "https://github.com/tripp-smith/lean-columnar.git" @ "788a42222d0112f3fab43f96825ac14a2297e4da"
 require «lean-yaml» from git
-  "git@github.com:tripp-smith/lean-yaml.git" @ "13c10e8b34a37945b4f89069a1f681f0031c0e9e"
+  "https://github.com/tripp-smith/lean-yaml.git" @ "13c10e8b34a37945b4f89069a1f681f0031c0e9e"
+
+lean_lib LFSECore where
+  roots := #[`LFSECore]
+
+lean_lib LFSEFinance where
+  roots := #[`LFSEFinance]
+
+lean_lib LFSEData where
+  roots := #[`LFSEData]
+
+lean_lib LFSEServer where
+  roots := #[`LFSEServer]
+
+lean_lib LFSEPython where
+  roots := #[`LFSEPython]
 
 @[default_target]
 lean_lib LFSE where
@@ -21,6 +36,9 @@ lean_lib LFSE where
 
 lean_exe lfse where
   root := `Main
+
+lean_exe «lfse-server» where
+  root := `LFSE.Server.Main
 
 @[test_driver]
 lean_exe test where

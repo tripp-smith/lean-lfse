@@ -1,7 +1,7 @@
-{"version": "1.1.0",
+{"version": "1.2.0",
  "packagesDir": ".lake/packages",
  "packages":
- [{"url": "git@github.com:tripp-smith/lean-yaml.git",
+ [{"url": "https://github.com/tripp-smith/lean-yaml.git",
    "type": "git",
    "subDir": null,
    "scope": "",
@@ -11,7 +11,7 @@
    "inputRev": "13c10e8b34a37945b4f89069a1f681f0031c0e9e",
    "inherited": false,
    "configFile": "lakefile.lean"},
-  {"url": "git@github.com:tripp-smith/lean-columnar.git",
+  {"url": "https://github.com/tripp-smith/lean-columnar.git",
    "type": "git",
    "subDir": null,
    "scope": "",
@@ -21,7 +21,7 @@
    "inputRev": "788a42222d0112f3fab43f96825ac14a2297e4da",
    "inherited": false,
    "configFile": "lakefile.lean"},
-  {"url": "git@github.com:tripp-smith/leancontracts.git",
+  {"url": "https://github.com/tripp-smith/leancontracts.git",
    "type": "git",
    "subDir": null,
    "scope": "",
@@ -62,4 +62,5 @@
    "inherited": true,
    "configFile": "lakefile.toml"}],
  "name": "«lean-lfse»",
- "lakeDir": ".lake"}
+ "lakeDir": ".lake",
+ "fixedToolchain": false}

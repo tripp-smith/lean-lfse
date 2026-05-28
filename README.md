@@ -64,6 +64,7 @@ Finance modules then build these nodes:
 ## Quickstart
 
 ```bash
+cat lean-toolchain
 lake build
 lake test
 lake exe lfse -- eval examples/BermudanOption.lean --scenario base --format json
@@ -210,7 +211,8 @@ in real scenario engines:
   missing market data instead of silently returning `0.0`;
 - random samples use the full UInt64 state scaled to `[0, 1)` rather than a
   small modulo bucket;
-- waterfall allocation is linear in tranche count;
+- waterfall allocation is linear in tranche count and has an executable
+  conservation checker that accounts for residual cash;
 - lazy graph forcing rejects conflicting duplicate node IDs and has an explicit
   recursion-depth guard;
 - CLI DOT export reports write failures with exit code `1`;
@@ -220,6 +222,41 @@ in real scenario engines:
 and swaps it returns `.error (.unsupportedMonteCarlo ...)`, which keeps audit
 behavior explicit until those models receive dedicated stochastic semantics.
 
+## Waterfall Theory
+
+`LFSE.Finance.Waterfall.Theory` re-exports through `LFSEFinance` and `LFSE`.
+It adds `remainingAfterWaterfall`, `waterfallCashTotal`, and
+`waterfallConservesCash` for checking that paid cash plus residual cash matches
+input cash on concrete waterfall allocations.
+
+The current waterfall runtime uses IEEE `Float`, so LFSE does not claim an
+unsound universal algebraic equality over all Float values. Structural edge
+cases are theorem-backed, and concrete financial cases are verified with
+`#guard`, `native_decide`, and runtime tolerance tests:
+
+```lean
+import LFSEFinance
+
+open LFSE
+open LFSE.Finance
+
+def tranches : List Tranche := [
+  { name := "senior", balance := 1000.0, rate := 0.05 },
+  { name := "mezz", balance := 500.0, rate := 0.08 }
+]
+
+example :
+    waterfallConservesCash 90.0 tranches = true := by
+  native_decide
+```
+
+Focused checks:
+
+```bash
+lake env lean test/Finance/WaterfallTheory.lean
+lake env lean examples/WaterfallTheoryDemo.lean
+```
+
 ## Verification
 
 Run the complete local verification set:
@@ -227,9 +264,11 @@ Run the complete local verification set:
 ```bash
 lake build
 lake test
+lake env lean test/Finance/WaterfallTheory.lean
 lake env lean examples/BermudanOption.lean
 lake env lean examples/PortfolioStress.lean
 lake env lean examples/WaterfallABS.lean
+lake env lean examples/WaterfallTheoryDemo.lean
 lake env lean examples/SimpleMC.lean
 lake env lean examples/RealWorldScenarios.lean
 lake exe lfse -- build examples/BermudanOption.lean
@@ -247,17 +286,16 @@ The test driver covers:
 - DSL macro expansion;
 - option monotonicity under spot shocks;
 - deterministic fixed-seed Monte Carlo;
-- waterfall cash conservation;
+- waterfall residual cash conservation;
 - market-data parsing.
 - realistic synthetic portfolio stress, ABS waterfall, and MC risk reports.
 - regression checks for discounting, exercise propagation, unsupported MC
   instruments, missing observables, duplicate graph IDs, depth guard behavior,
   CLI dispatch, and JSON escaping.
 
-The proof module currently includes compiling sample invariants for empty
-waterfalls, payment totals, and zero-cash single-tranche allocation. These are
-deliberately small but establish the pattern for adding stronger domain proofs as
-the finance surface grows.
+The proof module includes compiling sample invariants for empty waterfalls,
+payment totals, zero-cash single-tranche allocation, and the Float-aware
+waterfall theory helpers. See `docs/WaterfallTheory.md` for details.
 
 ## Repository Layout
 
@@ -278,10 +316,11 @@ docs/            -- architecture, CLI, and testing guides
 ## Current Scope And Limitations
 
 LFSE is production-shaped but intentionally compact. Current pricing support
-includes forwards, vanilla options, swaps, early-exercise helpers, scenario
-shocks, waterfalls, and deterministic Monte Carlo. The option implementation uses
-a lightweight normal-CDF approximation for stable examples and regression tests;
-it is not intended to claim full QuantLib parity.
+includes forwards, vanilla options, swaps, basket options, credit default swaps,
+early-exercise helpers, scenario shocks, waterfalls, deterministic Monte Carlo,
+LSMC, registered engines, and finite-difference Greeks. The option
+implementation uses a lightweight normal-CDF approximation for stable examples
+and regression tests; it is not intended to claim full QuantLib parity.
 
 The CLI preserves the compile-time DSL model: it does not runtime-parse arbitrary
 financial DSL text. Instead, examples and Lean modules compile scenarios into
@@ -292,9 +331,42 @@ Automated `lake fmt` is not available in the installed Lake command surface used
 for this checkout, so style is enforced through Lean compilation and manual
 review rather than a formatter command.
 
+## LFSE v2.1 Framework Surface
+
+The v2.1 API adds production-oriented framework modules while preserving the old
+entry points:
+
+- `LFSE.Registry`: typed descriptors plus callable implementations for
+  instruments, engines, data providers, DSL extensions, and graph exporters.
+- `LFSE.LazyCore.Backend`: backend-aware forcing and effect policy checks.
+- `LFSE.LazyCore.Provenance` and `Visualization`: lineage, DOT, Mermaid, and
+  graph JSON export.
+- `LFSE.Finance.Engine`, `Greeks`, and `LSMC`: registry-backed engine dispatch,
+  MC pricing, early-exercise approximation, and Delta/Gamma/Vega helpers.
+- `LFSE.Data.Provider`: CSV-like, Parquet, mmap Parquet, and Arrow IPC provider
+  wrappers through `lean-columnar`.
+- `LFSE.Server`: testable handlers for `/health`, `/eval`, `/trace`, `/graph`,
+  and `/metrics`.
+- `LFSE.Python`: Python-facing JSON helpers plus the `python/lfse` package.
+- `LFSE.Governance` and `LFSE.Security`: model approval, lineage audit strings,
+  request limits, auth checks, and token redaction.
+
+New CLI commands:
+
+```bash
+lake exe lfse -- export-graph examples/BermudanOption.lean
+lake exe lfse -- serve --host 127.0.0.1 --port 8080
+lake exe lfse -- register
+lake exe lfse -- benchmark --dashboard
+lake exe lfse -- test-suite
+```
+
 ## Documentation
 
 - `docs/Architecture.md`: module architecture and lazy graph flow.
 - `docs/CLI.md`: commands, flags, and exit codes.
 - `docs/Testing.md`: local verification checklist.
+- `docs/ExtensionGuide.md`: v2.1 extension registration workflow.
+- `docs/Migration.md`: v1 compatibility notes and new v2.1 APIs.
+- `docs/WaterfallTheory.md`: Float-aware waterfall conservation checks.
 - `Handoff_Report.md`: implementation evidence and final verification results.

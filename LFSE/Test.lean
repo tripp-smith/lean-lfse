@@ -46,6 +46,8 @@ def testFinance : IO Unit := do
   assert "call monotonicity" (shockedNpv > npv)
   let payments := Finance.allocateWaterfall 100.0 [{ name := "A", balance := 1000.0, rate := 0.05 }, { name := "B", balance := 500.0, rate := 0.08 }]
   assert "waterfall conservation" (Finance.paymentsTotal payments <= 100.0)
+  let remaining := Finance.remainingAfterWaterfall 100.0 [{ name := "A", balance := 1000.0, rate := 0.05 }, { name := "B", balance := 500.0, rate := 0.08 }]
+  assert "waterfall cash conserved with residual" (approxEq (Finance.paymentsTotal payments + remaining) 100.0)
 
 def testDiscountFormula : IO Unit := do
   let ctx := ({} : Context) |>.withMarket "spot.ACME" 110.0 |>.withMarket "rate.usd" 0.05
@@ -71,7 +73,7 @@ def testMonteCarlo : IO Unit := do
 def testForceMonteCarloErrors : IO Unit := do
   let putScenario := scenarioOf "put" (.option .put "ACME" 100.0 1.0 0.20)
   match ← forceMonteCarlo 100 42 putScenario with
-  | .error (.unsupportedMonteCarlo "put option") => pure ()
+  | .error (.unsupportedMonteCarlo "engine `monte-carlo` does not support instrument `put-option`") => pure ()
   | other => throw (IO.userError s!"expected unsupported put MC, got {repr other}")
   let missingMarket := { name := "missing", ctx := {}, instrument := Finance.Instrument.option .call "ACME" 100.0 1.0 0.20 }
   match ← forceMonteCarlo 100 42 missingMarket with
@@ -149,6 +151,94 @@ def testCliScenarioFileDispatch : IO Unit := do
       assert "default volatility" (approxEq volatility 0.20)
   | other => throw (IO.userError s!"path directory should not select PortfolioStress, got {repr other}")
 
+def testRegistry : IO Unit := do
+  let base ← assertOk "default registry" Registry.defaultCore
+  let customInstrument := (Finance.Instrument.exotic "custom-exotic" "ACME" [("multiplier", 1.0)]).toRegistryEntry
+  let withInstrument ← assertOk "register instrument" (registerInstrument base customInstrument)
+  assert "registry contains instrument" (Registry.contains withInstrument .instrument "custom-exotic")
+  let lookedUp ← assertOk "lookup instrument implementation" (Registry.lookupInstrument withInstrument "custom-exotic")
+  let (eval, _stats, _trace) ← LazyCore.force Finance.baseContext (lookedUp.payoffBuilder 500)
+  let value ← assertOk "registered payoff dispatch" eval
+  assert "registered instrument callable" (approxEq value 100.0)
+  let duplicate := Registry.registerInstrumentEntry withInstrument {
+    customInstrument with
+      descriptor := { customInstrument.descriptor with description := "different" },
+      implementationKey := "different"
+  }
+  match duplicate with
+  | .error (.registryError _) => pure ()
+  | _ => throw (IO.userError "expected duplicate registry error")
+  let customEngine : Registry.PricingEngineEntry := {
+    descriptor := { kind := .engine, name := "unit-engine", version := "2.1.0", description := "test engine" },
+    implementationKey := "test.unit-engine",
+    price := fun input => pure (.ok { scenario := input.scenarioName, npv := 123.0, lineage := LazyCore.exportLineage input.payoff })
+  }
+  let withEngine ← assertOk "register custom engine" (registerEngine withInstrument customEngine)
+  let engine ← assertOk "lookup engine implementation" (Registry.lookupEngine withEngine "unit-engine")
+  let result ← assertOk "custom engine dispatch" (← engine.price ((scenarioOf "unit" (.option .call "ACME" 100.0 1.0 0.20)).toPricingInput))
+  assert "custom engine called" (approxEq result.npv 123.0)
+
+def testConfigPrecedence : IO Unit := do
+  let cfg ← assertOk "config merge" (Config.merge
+    (some "paths: 10\nseed: 1\noutput: yaml\n")
+    [("LFSE_PATHS", "20")]
+    [("paths", "30"), ("output", "json")])
+  assert "cli paths wins" (cfg.paths == 30)
+  assert "cli output wins" (cfg.output == "json")
+  assert "yaml seed remains" (cfg.seed == UInt64.ofNat 1)
+
+def testBackendAndProvenance : IO Unit := do
+  let graph := LazyCore.add 10 (LazyCore.const 11 1.0) (LazyCore.const 12 2.0)
+  let (res, stats, trace) ← LazyCore.forceWithBackend { name := "audit", allowEffects := false } {} graph
+  let value ← assertOk "backend force" res
+  assert "backend value" (approxEq value 3.0)
+  assert "backend dispatch counted" (stats.backendDispatches == 1)
+  assert "trace populated" (!trace.isEmpty)
+  assert "trace provenance populated" (trace.all (fun ev => ev.provenance.isSome))
+  assert "max depth tracked" (stats.maxDepth > 0)
+  assert "lineage populated" (!(LazyCore.exportLineage graph).isEmpty)
+  let effectGraph : LazyCore.LazyNode := .effect 99 "io" (pure 1.0)
+  let (blocked, _, _) ← LazyCore.forceWithBackend { name := "audit", allowEffects := false } {} effectGraph
+  match blocked with
+  | .error (.evaluationFailed _) => pure ()
+  | other => throw (IO.userError s!"expected effect rejection, got {repr other}")
+
+def testAdvancedFinance : IO Unit := do
+  let scenario := scenarioOf "base" (.option .call "ACME" 100.0 1.0 0.20)
+  let greeks ← assertOk "compute greeks" (← computeGreeks scenario)
+  assert "delta present" (greeks.any (fun p => p.fst = "delta"))
+  let mc ← assertOk "engine mc" (← forceWithEngine scenario (.monteCarlo 100 42))
+  assert "engine mc positive" (mc.npv > 0.0)
+  let lsmc ← assertOk "engine lsmc" (← forceWithEngine scenario (.lsmc {}))
+  assert "lsmc nonnegative" (lsmc.npv >= 0.0)
+  let basket := { scenario with instrument := .basketOption ["ACME", "ACME"] [0.5, 0.5] 100.0 1.0 0.20 }
+  let basketNpv ← assertOk "basket npv" (← forceNPV basket)
+  assert "basket evaluates" (basketNpv > 0.0)
+
+def testDataProviderAndServer : IO Unit := do
+  let provider : MarketDataProvider := { name := "inline", kind := .csvLike, source := "spot.ACME,123.0\nrate.usd,0.04\n" }
+  let ctx ← assertOk "provider context" (← loadMarketProvider provider)
+  let spot ← assertOk "provider spot" (ctx.lookup "spot.ACME")
+  assert "provider spot parsed" (approxEq spot 123.0)
+  let cfg : Config := { authToken := some "secret" }
+  let denied ← Server.handleRequest cfg { path := "/eval", token := some "wrong" }
+  assert "server denies bad token" (denied.status == 401)
+  let ok ← Server.handleRequest cfg { path := "/eval", token := some "secret" }
+  assert "server eval ok" (ok.status == 200)
+  let metrics ← Server.handleRequest cfg { path := "/metrics", token := some "secret" }
+  assert "metrics ok" (metrics.status == 200)
+  assert "metrics help format" (metrics.body.contains '#')
+
+def testGovernanceSecurityAndPython : IO Unit := do
+  let model := ({ name := "model", version := "2.1.0", lineageHash := "abc" } : Governance.ModelVersion)
+  assert "draft not prod" (!Governance.canRunProduction model)
+  assert "approved prod" (Governance.canRunProduction (model.approve "qa"))
+  match Security.validateScenarioPayload { maxInputBytes := 4 } "12345" with
+  | .error (.securityError _) => pure ()
+  | other => throw (IO.userError s!"expected security error, got {repr other}")
+  let py ← Python.forceNpvJson "{}"
+  assert "python binding json" (py.contains '"')
+
 def runAll : IO UInt32 := do
   testLazySharing
   testCycleDetection
@@ -166,6 +256,12 @@ def runAll : IO UInt32 := do
   testDuplicateNodeIdDetection
   testEvaluationDepthGuard
   testCliScenarioFileDispatch
+  testRegistry
+  testConfigPrecedence
+  testBackendAndProvenance
+  testAdvancedFinance
+  testDataProviderAndServer
+  testGovernanceSecurityAndPython
   IO.println "LFSE tests passed"
   pure 0
 

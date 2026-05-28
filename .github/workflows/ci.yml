@@ -6,15 +6,31 @@ on:
 
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: leanprover/lean-action@v1
         with:
           build: true
           test: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: CLI smoke
         run: |
+          lake build LFSECore LFSEFinance LFSEData LFSEServer LFSEPython LFSE
+          lake env lean test/Finance/WaterfallTheory.lean
+          lake env lean examples/WaterfallTheoryDemo.lean
           lake exe lfse -- eval examples/BermudanOption.lean --scenario base --format json
           lake exe lfse -- trace examples/BermudanOption.lean --trace-level 2
+          lake exe lfse -- export-graph examples/BermudanOption.lean
+          lake exe lfse -- serve
           lake run benchmarks
+      - name: Python smoke
+        run: |
+          python -m pip install -e python pytest
+          python -m pytest python/tests
