@@ -13,6 +13,11 @@
 
 **Note:** This work was performed by Grok 4.3 (xAI) in a large-context interactive session.
 
+### Developer Workflow
+- Added `clean-commit-push` skill (invoked via `/ccp`).
+- Automates end-of-session notes, temp file cleanup into `_tmp/`, .gitignore maintenance, and high-quality commits.
+- Created as a project skill so the workflow can be versioned and improved alongside the codebase.
+
 ## 2.1.0
 
 - Added typed plugin registries for instruments, engines, data providers, DSL
