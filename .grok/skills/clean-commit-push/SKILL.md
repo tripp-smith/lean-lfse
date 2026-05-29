@@ -33,9 +33,11 @@ Trigger this skill when the user wants to:
 
 Follow these steps in order:
 
-### 1. Gather Context
-- Ask the user for a concise summary of what was accomplished in this session (if they haven't already provided one).
-- If they ran this after a long coding session, offer to review recent changes (`git diff --name-only HEAD` or recent file modifications) to help jog their memory.
+### 1. Gather Context (Autonomous by Default)
+- **First, act autonomously**: Run `git status`, `git diff --name-only`, `git log --oneline -10`, and inspect recently changed files yourself.
+- Synthesize a draft summary of what was likely accomplished in the session based on the actual code changes.
+- Only ask the user for clarification or corrections if the analysis is ambiguous or incomplete.
+- When the user says phrases like "do it for me", "go", "just do it", or "the skill should do this automatically", minimize questions and drive the process forward with your own analysis.
 
 ### 2. Create / Update Notes
 - Help the user write clear release notes or a session summary.
@@ -92,17 +94,22 @@ Follow these steps in order:
 
 ## Example Invocation
 
-User: "ccp this session"
+User: "ccp" or "do it for me"
 
-Agent should:
-1. Ask for (or recall) what was done
-2. Offer to create `_tmp/SESSION_...md`
-3. Clean anything left in root
-4. Draft commit message referencing the session notes
-5. Commit + push
+Agent behavior (preferred):
+1. Autonomously inspect `git status`, recent diffs, and changed files.
+2. Generate a draft session note in `_tmp/SESSION_....md`.
+3. Propose updates to CHANGELOG.md / README.md as appropriate.
+4. Draft a high-quality commit message.
+5. Show a clear summary of proposed changes + commit message.
+6. Ask for final confirmation only on the commit message and whether to push.
+7. Execute commit + push.
+
+The skill should be proactive and only interrupt the user when genuinely uncertain.
 
 ## Tips for Best Results
 
+- The skill is designed to be **autonomous by default**. When the user says "go", "do it for me", or simply "/ccp", lead with your own analysis of the changes rather than immediately asking questions.
 - Run this skill **before** the user gets distracted and forgets the details of the session.
 - The `_tmp/` directory is the preferred home for detailed implementation notes that don't belong in the permanent docs.
-- This skill pairs very well with long agentic coding sessions.
+- This skill pairs very well with long agentic coding sessions (especially those involving Grok or other LLMs).
