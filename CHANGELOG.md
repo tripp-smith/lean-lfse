@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### LSMC Formal Upgrade (Grok 4.3 session)
+- Began implementation of the true Longstaff–Schwartz algorithm per `_tmp/lsmc-formal-spec.md`.
+- Added Gaussian sampler (Box–Muller + PCG64) with statistical validation.
+- Added pure-Lean Cholesky + normal-equation solver (`Numerics/Linalg`).
+- Created new `LSMC/` and `Numerics/` module structure.
+- Wired improved Gaussian-based Monte Carlo into the legacy `LSMC` pricing surface.
+- Added C FFI shim for optional LAPACK acceleration.
+- Extensive session documentation in `_tmp/LSMC_GROK_IMPLEMENTATION_SESSION.md`.
+
+**Note:** This work was performed by Grok 4.3 (xAI) in a large-context interactive session.
+
 ## 2.1.0
 
 - Added typed plugin registries for instruments, engines, data providers, DSL

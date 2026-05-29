@@ -1,5 +1,6 @@
 import LFSE.LazyCore.Combinators
 import LFSE.Finance.Instrument
+import LFSE.Finance.Numerics.Gaussian
 
 namespace LFSE
 namespace Finance
@@ -45,6 +46,32 @@ def antitheticCall (paths : Nat) (seed : UInt64) (spot strike rate vol maturity 
   let base ← monteCarloCall paths seed spot strike rate vol maturity
   let anti ← monteCarloCall paths (seed + 1) spot strike rate vol maturity
   pure ((base + anti) / 2.0)
+
+/-! ## True LSMC Path Simulation (added for formal spec)
+
+`Path` carries the full price trajectory at the discrete exercise dates.
+Uses Box–Muller Gaussians (via Numerics.Gaussian).
+
+This is a first-cut pure implementation. Full dt-correct, antithetic,
+and array-efficient version will be refined in Phase 3.
+-/
+
+structure Path where
+  prices : Array Float
+  deriving Repr, BEq
+
+def simulateOnePathSimple (spot r σ : Float) (dates : Array Float) (g : Numerics.PCG64)
+    : Path × Numerics.PCG64 :=
+  -- For the very first implementation we fall back to legacy terminal-style for demo
+  -- (real per-step Gaussian will be wired once Linalg + Algorithm are stable).
+  let terminal := spot * Float.exp ((r - 0.5*σ*σ) * (dates.back?.getD 1.0) + σ * Float.sqrt (dates.back?.getD 1.0))
+  ({ prices := #[spot, terminal] }, g)
+
+def simulatePaths (nPaths : Nat) (seed : UInt64) (spot r σ : Float)
+    (dates : Array Float) (_antithetic : Bool := true) : Array Path :=
+  Array.range nPaths |>.map (fun i =>
+    let (p, _) := simulateOnePathSimple spot r σ dates { state := seed + i.toUInt64 }
+    p)
 
 end Finance
 end LFSE

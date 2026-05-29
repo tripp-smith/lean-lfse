@@ -13,4 +13,6 @@ python/dist/
 python/*.egg-info/
 *.pyc
 __pycache__/
-_tmp
+_tmp/
+# Temporary notes, session logs, and scratch work from implementation efforts
+_tmp/*

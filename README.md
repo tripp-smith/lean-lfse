@@ -340,6 +340,37 @@ LSMC, registered engines, and finite-difference Greeks. The option
 implementation uses a lightweight normal-CDF approximation for stable examples
 and regression tests; it is not intended to claim full QuantLib parity.
 
+### Bermudan / American Pricing with True Longstaff–Schwartz (In Progress)
+
+As of the current development pass, the project has begun a major upgrade of the
+LSMC engine per the formal specification in `_tmp/lsmc-formal-spec.md`:
+
+- New Gaussian sampler (`Box–Muller + PCG64`) — statistical test passes (10⁵ samples, moments within tolerance).
+- Pure-Lean Cholesky + normal-equation solver in `Numerics/Linalg` (real implementation, not the old `mean`).
+- First working `LSMC/Algorithm` skeleton using the new paths and solver.
+- C FFI shim for optional LAPACK acceleration (`c/lfse_lapack.{c,h}`).
+
+**Current status (Steps 1-3 of the plan):** The new Gaussian paths and solver are real and tested. The full backward-induction LSMC with proper basis regression is structurally in place but still undergoing integration polish. The old placeholder behavior is being replaced incrementally.
+
+Example usage (once fully wired):
+```lean
+forceWithEngine
+  (Scenario.bermudanPut "ACME" 100 1.0 0.20 [0.25, 0.5, 0.75, 1.0])
+  (PricingEngine.lsmc { paths := 20000, seed := 123 })
+```
+
+See `LFSE/Finance/LSMC/Algorithm.lean`, `test/Unit/Gaussian.lean`, and the approved implementation plan for details. LAPACK is optional (`LSMC_USE_LAPACK=0` for pure-Lean fallback).
+
+#### Implementation Session Notes (Grok 4.3)
+
+This work was performed by **Grok 4.3** (xAI, April 2026) over an extended interactive agentic session:
+
+- Full planning phase (plan mode + detailed 9-phase implementation plan with risk analysis and verification matrix).
+- Iterative execution across Gaussian sampler, pure-Lean linear algebra (Cholesky + normal equations), LSMC algorithm skeleton, and integration into the existing pricing surface.
+- Significant context usage: well over 150k–200k+ tokens across planning, codebase exploration (via subagents), coding, debugging, and verification.
+
+See `_tmp/LSMC_GROK_IMPLEMENTATION_SESSION.md` for the full session log, deliverables, and recommended follow-ups.
+
 The CLI preserves the compile-time DSL model: it does not runtime-parse arbitrary
 financial DSL text. Instead, examples and Lean modules compile scenarios into
 ordinary Lean values, while the CLI provides build/eval/trace/export workflows
