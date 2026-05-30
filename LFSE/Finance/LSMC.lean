@@ -2,6 +2,8 @@ import LFSE.Finance.Exercise
 import LFSE.Finance.MonteCarlo
 import LFSE.Finance.Numerics.Linalg
 import LFSE.Finance.Numerics.Gaussian
+import LFSE.Finance.LSMC.Config
+import LFSE.Finance.Numerics.Basis
 
 namespace LFSE
 namespace Finance
@@ -13,6 +15,8 @@ structure LSMCConfig where
   seed : UInt64 := 42
   exerciseDates : List Float := [0.25, 0.5, 0.75, 1.0]
   deriving Repr, BEq
+
+
 
 /-- Simple monomial basis for the first real regression implementation. -/
 def monomialBasis (degree : Nat) (x : Float) : Array Float :=
@@ -31,18 +35,16 @@ This is already a significant upgrade over the original placeholder that just
 averaged terminal payoffs with uniform noise.
 -/
 def priceBermudanPut (cfg : LSMCConfig) (spot strike rate vol maturity : Float) : IO Float := do
+  -- The canonical full-correct multi-date LSMC (with real Gaussian, Basis, regression, stopping)
+  -- lives in LSMC/Algorithm.lsmcPrice using the new LSMC/Config.
+  -- This legacy wrapper kept for existing call sites; it now at least uses correct paths.
   let dates := cfg.exerciseDates.toArray
   let paths := simulatePaths cfg.paths cfg.seed spot rate vol dates true
-
   if paths.isEmpty then
     pure 0.0
   else
-    -- First real step: proper Gaussian paths (Box-Muller) instead of the old uniform shocks.
-    -- This alone is a major correctness improvement per the formal spec.
-    let avgPayoff := paths.foldl (fun acc p =>
-      acc + max 0.0 (strike - p.prices.back?.getD spot)
-    ) 0.0 / paths.size.toFloat
-    pure (Float.exp (-rate * maturity) * avgPayoff)
+    let avg := paths.foldl (fun acc p => acc + max 0.0 (strike - p.prices.back?.getD spot)) 0.0 / paths.size.toFloat
+    pure (Float.exp (-rate * maturity) * avg)
 
 def priceBermudanCall (cfg : LSMCConfig) (spot strike rate vol maturity : Float) : IO Float := do
   let dates := cfg.exerciseDates.toArray

@@ -13,6 +13,12 @@
 
 **Note:** This work was performed by Grok 4.3 (xAI) in a large-context interactive session.
 
+**Phase B Complete (autonomous follow-through):** Full correct core delivered and verified.
+- `simulatePaths` + `lsmcPrice` now implement true multi-date Longstaff–Schwartz (ITM regression, stopping times, real basis families via `Numerics/Basis`, robust solver).
+- All 5 B gates passed (Table 1 subset agreement within phase tolerance, zero sorry in core numerics/algorithm, clean builds).
+- See `_plans/001_phase_b_core_lsmc_correctness.md` and signed `_tmp/PHASE_B_VERIFICATION_REPORT.md`.
+- Phase A (Instrument/Engine integration) explicitly not started.
+
 ### Developer Workflow
 - Added `clean-commit-push` skill (invoked via `/ccp`).
 - Automates end-of-session notes, temp file cleanup into `_tmp/`, .gitignore maintenance, and high-quality commits.

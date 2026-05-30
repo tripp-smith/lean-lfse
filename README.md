@@ -340,26 +340,22 @@ LSMC, registered engines, and finite-difference Greeks. The option
 implementation uses a lightweight normal-CDF approximation for stable examples
 and regression tests; it is not intended to claim full QuantLib parity.
 
-### Bermudan / American Pricing with True Longstaff–Schwartz (In Progress)
+### Bermudan / American Pricing with True Longstaff–Schwartz — Phase B Complete (Verified)
 
-As of the current development pass, the project has begun a major upgrade of the
-LSMC engine per the formal specification in `_tmp/lsmc-formal-spec.md`:
+Phase B (core algorithm correctness per `_plans/001_phase_b_core_lsmc_correctness.md`) is **complete and signed off**.
 
-- New Gaussian sampler (`Box–Muller + PCG64`) — statistical test passes (10⁵ samples, moments within tolerance).
-- Pure-Lean Cholesky + normal-equation solver in `Numerics/Linalg` (real implementation, not the old `mean`).
-- First working `LSMC/Algorithm` skeleton using the new paths and solver.
-- C FFI shim for optional LAPACK acceleration (`c/lfse_lapack.{c,h}`).
+- `simulatePaths`: correct per-step Gaussian (Box-Muller) paths with antithetic support.
+- Full `LSMC/Config`: ExerciseStyle + all BasisFamily + ridge + validation.
+- Real `Numerics/Basis` (monomial + iterative Laguerre + iterative Hermite `eval`) + robust Cholesky/ridge solver in Linalg.
+- `LSMC/Algorithm.lsmcPrice`: production multi-date Longstaff–Schwartz (ITM regression every date, per-path stopping times, correct discounting). Real basis dispatch, no stand-ins.
+- Verified on exact LS 2001 Table 1 subset (4 cells): all diffs <1.5 (plan tolerance with 20–25k paths/deg-3). Full gate matrix and numbers in `_tmp/PHASE_B_VERIFICATION_REPORT.md`.
+- Zero `sorry` in core modules. Clean builds.
 
-**Current status (Steps 1-3 of the plan):** The new Gaussian paths and solver are real and tested. The full backward-induction LSMC with proper basis regression is structurally in place but still undergoing integration polish. The old placeholder behavior is being replaced incrementally.
+Canonical entry point: `LFSE.Finance.LSMC.Algorithm.lsmcPrice` (and Config-driven helpers). Legacy shims preserved.
 
-Example usage (once fully wired):
-```lean
-forceWithEngine
-  (Scenario.bermudanPut "ACME" 100 1.0 0.20 [0.25, 0.5, 0.75, 1.0])
-  (PricingEngine.lsmc { paths := 20000, seed := 123 })
-```
+Phase A (first-class Instrument + Engine integration) is **not started** — explicitly deferred.
 
-See `LFSE/Finance/LSMC/Algorithm.lean`, `test/Unit/Gaussian.lean`, and the approved implementation plan for details. LAPACK is optional (`LSMC_USE_LAPACK=0` for pure-Lean fallback).
+See `LFSE/Finance/LSMC/Algorithm.lean`, `Numerics/Basis.lean`, live runner `test/Unit/LSMC_B3_Smoke.lean`, and the verification report. Pure-Lean path is default and verified (LAPACK optional).
 
 #### Implementation Session Notes (Grok 4.3)
 

@@ -96,8 +96,11 @@ def backSub (R : Mat) (y : Vec) : Option Vec :=
         x := x.set! i (s / R[i]![i]!)
       return some x
 
-/-- Solve the normal equations (ΦᵀΦ) β = Φᵀ y using pure Cholesky.
-This is the real implementation (no longer a mean bridge). -/
+/-- Solve the normal equations (ΦᵀΦ) β = Φᵀ y using pure Cholesky (B4).
+Real implementation with Gram matrix construction. Returns none on non-SPD.
+This, combined with the ridge path in normalEqSolveSafe, provides the required
+graceful degradation for the LSMC algorithm.
+-/
 def solveNormalEqCholesky (Phi : Mat) (y : Vec) : Option Vec :=
   let m := if Phi.isEmpty then 0 else Phi[0]!.size
   if m == 0 then some #[] else
@@ -121,23 +124,48 @@ def solveNormalEqCholesky (Phi : Mat) (y : Vec) : Option Vec :=
           | none => return none
           | some z => backSub R z
 
-/-- Ridge-augmented version (adds λI to G before Cholesky). Used on breakdown. -/
+/-- Ridge-augmented version (adds λI to G before Cholesky). Used on breakdown (B4).
+Properly augments the Gram matrix for numerical stability.
+-/
 def solveNormalEqRidge (Phi : Mat) (y : Vec) (ridge : Float) : Option Vec :=
   if ridge <= 0.0 then solveNormalEqCholesky Phi y else
-    -- TODO: implement ridge-augmented Gram; for v1 we fall back to the pure solve
-    solveNormalEqCholesky Phi y
+    let m := if Phi.isEmpty then 0 else Phi[0]!.size
+    if m == 0 then some #[] else
+      Id.run do
+        let mut G := Array.replicate m (Array.replicate m 0.0)
+        for k in [:Phi.size] do
+          for i in [:m] do
+            for j in [:m] do
+              G := G.set! i (G[i]!.set! j (G[i]![j]! + Phi[k]![i]! * Phi[k]![j]!))
+        -- Add ridge to diagonal
+        for i in [:m] do
+          G := G.set! i (G[i]!.set! i (G[i]![i]! + ridge))
+        let mut rhs := Array.replicate m 0.0
+        for k in [:Phi.size] do
+          for i in [:m] do
+            rhs := rhs.set! i (rhs[i]! + Phi[k]![i]! * y[k]!)
+        match cholesky G with
+        | none => none
+        | some R =>
+            match forwardSub (transpose R) rhs with
+            | none => none
+            | some z => backSub R z
 
-/-- The safe public entry point for the Float Algorithm.
-Tries (in order):
-  1. LAPACK dposv via FFI (if useLapack && extern available)
-  2. Pure Cholesky
-  3. Ridge-augmented pure Cholesky (λ=1e-8)
-  4. Return none (caller skips early exercise at this date; never throws)
-See NFR-R1, D-15. -/
+/-- Pure version of the robust solver (preferred for pure contexts like lsmcPrice).
+Implements the full documented fallback: direct Cholesky → ridge-augmented Cholesky.
+Returns `none` on total failure (per NFR-R1).
+-/
+def normalEqSolveSafePure (Phi : Mat) (y : Vec) (ridge : Float := 0.0) : Option Vec :=
+  match solveNormalEqCholesky Phi y with
+  | some res => some res
+  | none     => solveNormalEqRidge Phi y (if ridge > 0 then ridge else 1e-8)
+
+/-- The safe public entry point for the Float Algorithm (B4 target behavior per spec).
+Implements the spirit of the required robustness. For Phase B this delegates to the
+pure implementation (full LAPACK FFI path is stubbed off).
+-/
 def normalEqSolveSafe (Phi : Mat) (y : Vec) (ridge : Float := 0.0) : IO (Option Vec) := do
-  -- For Phase 2 we only have the pure path; FFI wired in Phase 1.
-  -- The FFI symbols will be declared with `@[extern]` once the lib exists.
-  pure (solveNormalEqCholesky Phi y <|> solveNormalEqRidge Phi y (max ridge 1e-8))
+  pure (normalEqSolveSafePure Phi y ridge)
 
 /-- Placeholder for the mathlib-typed Reference solver (used only in proofs / ℚ cross-check).
 Noncomputable; implemented in Reference layer using mathlib Matrix when mathlib is present. -/
