@@ -24,5 +24,18 @@ def portfolioStress : List Scenario :=
   let base : Scenario := { name := "base", ctx := baseContext, instrument := .option .call "ACME" 100.0 1.0 0.20 }
   [base, shock base "spot.ACME" 10.0, shock base "spot.ACME" (-10.0)]
 
+-- Phase A convenience constructors for early-exercise instruments
+def bermudanPut (underlying : String) (strike maturity volatility : Float) (dates : Array Float) : Instrument :=
+  .bermudanOption .put underlying strike maturity volatility dates
+
+def bermudanCall (underlying : String) (strike maturity volatility : Float) (dates : Array Float) : Instrument :=
+  .bermudanOption .call underlying strike maturity volatility dates
+
+def americanPut (underlying : String) (strike maturity volatility : Float) (steps : Nat) : Instrument :=
+  .americanOption .put underlying strike maturity volatility steps
+
+def americanCall (underlying : String) (strike maturity volatility : Float) (steps : Nat) : Instrument :=
+  .americanOption .call underlying strike maturity volatility steps
+
 end Finance
 end LFSE

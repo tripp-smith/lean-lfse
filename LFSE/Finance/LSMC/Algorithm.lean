@@ -86,6 +86,12 @@ def priceBermudanPut (cfg : Config) (spot strike rate vol maturity : Float) : IO
 def priceAmericanPut (cfg : Config) (spot strike rate vol maturity : Float) : IO Float := do
   priceBermudanPut cfg spot strike rate vol maturity
 
+def priceBermudanCall (cfg : Config) (spot strike rate vol maturity : Float) : IO Float := do
+  pure (lsmcPrice cfg (fun S => max 0.0 (S - strike)) spot rate vol maturity)
+
+def priceAmericanCall (cfg : Config) (spot strike rate vol maturity : Float) : IO Float := do
+  priceBermudanCall cfg spot strike rate vol maturity
+
 end LSMC
 end Finance
 end LFSE

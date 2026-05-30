@@ -18,6 +18,11 @@ inductive Instrument where
   | basketOption (underlyings : List String) (weights : List Float) (strike maturity volatility : Float)
   | creditDefaultSwap (reference : String) (notional spread hazardRate recovery maturity : Float)
   | exotic (name : String) (underlying : String) (parameters : List (String × Float))
+  -- Phase A: Early exercise instruments (powered by LSMC after Phase B)
+  | bermudanOption (kind : OptionKind) (underlying : String)
+      (strike maturity volatility : Float) (exerciseDates : Array Float)
+  | americanOption (kind : OptionKind) (underlying : String)
+      (strike maturity volatility : Float) (steps : Nat)
   deriving Repr, BEq
 
 def max0 (x : Float) : Float :=
@@ -73,6 +78,18 @@ def Instrument.payoffNode (baseId : Nat) : Instrument → LazyCore.LazyNode
       let spot := LazyCore.observable (baseId + 1) ("spot." ++ underlying)
       let multiplier := params.find? (fun p => p.fst = "multiplier") |>.map (fun p => p.snd) |>.getD 1.0
       LazyCore.LazyNode.unary baseId ("exotic:" ++ name) (fun s => s * multiplier) spot
+  -- Phase A early-exercise instruments: for now produce a simple discounted payoff.
+  -- Real LSMC pricing (with early exercise) is handled via the Engine dispatch layer.
+  | .bermudanOption kind underlying strike maturity volatility _exerciseDates =>
+      let spot := LazyCore.observable (baseId + 1) ("spot." ++ underlying)
+      let rate := LazyCore.observable (baseId + 2) "rate.usd"
+      LazyCore.LazyNode.binary baseId "bermudan-option-placeholder"
+        (fun s r => blackScholes kind s strike r volatility maturity) spot rate
+  | .americanOption kind underlying strike maturity volatility _steps =>
+      let spot := LazyCore.observable (baseId + 1) ("spot." ++ underlying)
+      let rate := LazyCore.observable (baseId + 2) "rate.usd"
+      LazyCore.LazyNode.binary baseId "american-option-placeholder"
+        (fun s r => blackScholes kind s strike r volatility maturity) spot rate
 
 def Instrument.registryName : Instrument → String
   | .forward .. => "forward"
@@ -82,6 +99,11 @@ def Instrument.registryName : Instrument → String
   | .basketOption .. => "basket-option"
   | .creditDefaultSwap .. => "credit-default-swap"
   | .exotic name .. => name
+  -- Phase A early-exercise instruments
+  | .bermudanOption .call .. => "bermudan-call"
+  | .bermudanOption .put ..  => "bermudan-put"
+  | .americanOption .call .. => "american-call"
+  | .americanOption .put ..  => "american-put"
 
 def Instrument.toRegistryEntry (instrument : Instrument) : Registry.InstrumentEntry := {
   descriptor := {
@@ -93,6 +115,9 @@ def Instrument.toRegistryEntry (instrument : Instrument) : Registry.InstrumentEn
   implementationKey := "lfse-finance.instrument." ++ instrument.registryName,
   supportedEngineKeys := match instrument with
     | .option .call .. => ["analytic", "monte-carlo", "lsmc"]
+    -- Phase A: Early-exercise instruments support full engine set (especially lsmc)
+    | .bermudanOption .. => ["analytic", "monte-carlo", "lsmc"]
+    | .americanOption .. => ["analytic", "monte-carlo", "lsmc"]
     | _ => ["analytic"],
   payoffBuilder := instrument.payoffNode
 }

@@ -353,9 +353,18 @@ Phase B (core algorithm correctness per `_plans/001_phase_b_core_lsmc_correctnes
 
 Canonical entry point: `LFSE.Finance.LSMC.Algorithm.lsmcPrice` (and Config-driven helpers). Legacy shims preserved.
 
-Phase A (first-class Instrument + Engine integration) is **not started** — explicitly deferred.
+Phase A (Instrument variants + Engine integration) is **in progress** (major hygiene milestone achieved).
 
-See `LFSE/Finance/LSMC/Algorithm.lean`, `Numerics/Basis.lean`, live runner `test/Unit/LSMC_B3_Smoke.lean`, and the verification report. Pure-Lean path is default and verified (LAPACK optional).
+- New first-class `Instrument.bermudanOption` and `Instrument.americanOption` variants have been added.
+- **Engine hygiene complete**: `EngineParams.lsmc` and the LSMC dispatch now use the modern `LSMC.Config` directly. Legacy shim (`LFSE/Finance/LSMC.lean`) is a thin documented compatibility layer only. New instruments receive properly constructed configs with instrument-derived `ExerciseStyle`.
+- They are wired into the registry and both `lsmc` + `monte-carlo` engines.
+- Convenience constructors available via `Finance.Scenario` (`bermudanPut`, `bermudanCall`, `americanPut`, `americanCall`).
+- `examples/BermudanOption.lean` demonstrates real early-exercise pricing via `forceWithEngine` + `PricingEngine.lsmc`.
+- See `_plans/002_phase_a_lsmc_cleanup.md`, `_tmp/PHASE_A_BLAST_RADIUS.md`, and `_tmp/SESSION_2026-05-30_lsmc-engine-hygiene.md` for status and remaining work.
+
+Canonical entry point for the core algorithm remains `LFSE.Finance.LSMC.Algorithm.lsmcPrice` (and Config-driven helpers).
+
+See `LFSE/Finance/LSMC/Algorithm.lean`, `Numerics/Basis.lean`, the updated `examples/BermudanOption.lean`, and the Phase B verification report. Pure-Lean path is default and verified (LAPACK optional).
 
 #### Implementation Session Notes (Grok 4.3)
 

@@ -19,6 +19,15 @@
 - See `_plans/001_phase_b_core_lsmc_correctness.md` and signed `_tmp/PHASE_B_VERIFICATION_REPORT.md`.
 - Phase A (Instrument/Engine integration) explicitly not started.
 
+### LSMC Engine Hygiene (Phase A — Core Duality Resolution)
+- Made `EngineParams.lsmc` (and `PricingEngine.lsmc` / dispatch) use the modern `LSMC.Config` as the primary public type (ExerciseStyle, BasisFamily, ridge, antithetic, etc.).
+- Refactored the legacy `LFSE/Finance/LSMC.lean` into an honest, minimal compatibility shim with `legacyConfigToModern` converter + full delegation to `LSMC.Algorithm`.
+- `lsmcEngineEntry` now builds properly enriched `LSMC.Config` instances for the new first-class `bermudanOption`/`americanOption` instruments (instrument exercise schedule merged with caller tuning params) and calls the real algorithm directly.
+- Resolved import/qualification friction cleanly. Removed transitional code, broken stubs, and "blocked" comments from the hot paths.
+- Full `lake build && lake test` green + Bermudan example verified.
+- See `_plans/002_phase_a_lsmc_cleanup.md` (Phase 1 marked complete) and `_tmp/SESSION_2026-05-30_lsmc-engine-hygiene.md`.
+- This puts the framework on a polished foundation for future LSMC functionality.
+
 ### Developer Workflow
 - Added `clean-commit-push` skill (invoked via `/ccp`).
 - Automates end-of-session notes, temp file cleanup into `_tmp/`, .gitignore maintenance, and high-quality commits.

@@ -32,6 +32,21 @@ def computeVega : Scenario -> Float -> IO (LFSEExcept Float)
       | .ok ures, .ok dres => pure (.ok ((ures.npv - dres.npv) / (2.0 * bump)))
       | .error err, _ => pure (.error err)
       | _, .error err => pure (.error err)
+  -- Phase A: Treat bermudan/american options as option-like for vega (bump volatility)
+  | s@{ instrument := .bermudanOption kind u strike maturity vol _, .. }, bump => do
+      let up := { s with instrument := .bermudanOption kind u strike maturity (vol + bump) #[] }
+      let down := { s with instrument := .bermudanOption kind u strike maturity (vol - bump) #[] }
+      match ← up.eval, ← down.eval with
+      | .ok ures, .ok dres => pure (.ok ((ures.npv - dres.npv) / (2.0 * bump)))
+      | .error err, _ => pure (.error err)
+      | _, .error err => pure (.error err)
+  | s@{ instrument := .americanOption kind u strike maturity vol _, .. }, bump => do
+      let up := { s with instrument := .americanOption kind u strike maturity (vol + bump) 0 }
+      let down := { s with instrument := .americanOption kind u strike maturity (vol - bump) 0 }
+      match ← up.eval, ← down.eval with
+      | .ok ures, .ok dres => pure (.ok ((ures.npv - dres.npv) / (2.0 * bump)))
+      | .error err, _ => pure (.error err)
+      | _, .error err => pure (.error err)
   | _, _ => pure (.error (.unsupportedMonteCarlo "vega for non-option instrument"))
 
 def computeGreeks (scenario : Scenario) (observable : String := "spot.ACME") : IO (LFSEExcept (List (String × Float))) := do
