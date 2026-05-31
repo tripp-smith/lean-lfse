@@ -13,6 +13,15 @@ macro_rules
       `(LFSE.Finance.Instrument.forward $u $k $t)
   | `(swap($n:term, $fixed:term, $float:term, $t:term)) =>
       `(LFSE.Finance.Instrument.swap $n $fixed $float $t)
+  -- Phase A early-exercise (use the convenience constructors in Scenario)
+  | `(bermudanCall($u:str, $k:term, $t:term, $v:term, [ $dates:term,* ])) =>
+      `(LFSE.Finance.Scenario.bermudanCall $u $k $t $v #[$dates,*])
+  | `(bermudanPut($u:str, $k:term, $t:term, $v:term, [ $dates:term,* ])) =>
+      `(LFSE.Finance.Scenario.bermudanPut $u $k $t $v #[$dates,*])
+  | `(americanCall($u:str, $k:term, $t:term, $v:term, $steps:term)) =>
+      `(LFSE.Finance.Scenario.americanCall $u $k $t $v $steps)
+  | `(americanPut($u:str, $k:term, $t:term, $v:term, $steps:term)) =>
+      `(LFSE.Finance.Scenario.americanPut $u $k $t $v $steps)
   | `(#scenario $name:ident => $body:term) =>
       `(LFSE.scenarioOf $(Lean.quote (toString name.getId.eraseMacroScopes)) $body)
 

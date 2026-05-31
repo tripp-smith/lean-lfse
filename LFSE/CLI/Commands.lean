@@ -12,7 +12,7 @@ namespace CLI
 namespace Commands
 
 def usage : String :=
-  "usage: lfse <build|eval|trace|export-dot|export-graph|serve|register|benchmark|test-suite> [file.lean] [--scenario NAME] [--output json|yaml] [--paths N] [--seed N] [--trace-level N] [--output PATH]"
+  "usage: lfse <build|eval|trace|export-dot|export-graph|serve|register|benchmark|test-suite> [file.lean] [--scenario NAME] [--engine analytic|monte-carlo|lsmc] [--paths N] [--seed N] [--format json|yaml] [--output PATH] [--trace-level N]\n  Early-exercise instruments (bermudan/american) are supported via --engine lsmc"
 
 def findFlag (flag : String) : List String → Option String
   | [] => none
@@ -43,6 +43,12 @@ def traceLevel (args : List String) : Nat :=
   | some s => s.toNat?.getD 0
   | none => 0
 
+def engine (args : List String) : Finance.PricingEngine :=
+  match findFlag "--engine" args with
+  | some "lsmc" => Finance.PricingEngine.lsmc { paths := paths args, seed := seed args }
+  | some "analytic" => Finance.PricingEngine.analytic
+  | _ => Finance.PricingEngine.monteCarlo (paths args) (seed args)  -- default for backward compat
+
 def fileName (path : String) : String :=
   (path.splitOn "/").reverse.head?.getD path
 
@@ -58,6 +64,9 @@ def scenarioFromPath (path : String) (name : String) : Finance.Scenario :=
     { name := name, ctx := Finance.baseContext, instrument := .swap 1000000.0 0.04 0.052 5.0 }
   else if namePart = "SimpleMC.lean" then
     { name := name, ctx := Finance.baseContext, instrument := .option .call "ACME" 100.0 1.0 0.20 }
+  else if namePart = "BermudanOption.lean" then
+    -- Phase A: First-class early-exercise instrument (primarily interesting via LSMC)
+    { name := name, ctx := Finance.baseContext, instrument := Finance.bermudanPut "ACME" 100.0 1.0 0.20 #[0.25, 0.5, 0.75, 1.0] }
   else
     defaultScenario
 
@@ -74,17 +83,12 @@ def buildCmd (file : String) : IO UInt32 := do
 
 def evalCmd (file : String) (args : List String) : IO UInt32 := do
   let scenario := scenarioFromPath file (scenarioName args)
-  let r ← scenario.eval
-  match r with
+  let chosenEngine := engine args
+  match ← Finance.forceWithEngine scenario chosenEngine with
   | .error err =>
       IO.eprintln err.message
       pure 1
   | .ok result =>
-      let mcResult ← forceMonteCarlo (paths args) (seed args) scenario
-      let result :=
-        match mcResult with
-        | .ok mc => { result with greeks := ("mc", mc) :: result.greeks }
-        | .error _ => result
       IO.println (renderResult (outputFormat args) result)
       pure 0
 
@@ -144,8 +148,12 @@ def registerCmd : IO UInt32 := do
       IO.eprintln err.message
       pure 1
   | .ok registry =>
-      let registry := registerInstrumentDescriptor registry "basket-option" "Weighted basket option" |>.bind (fun r =>
-        registerInstrumentDescriptor r "credit-default-swap" "Credit default swap")
+      let registry := registerInstrumentDescriptor registry "basket-option" "Weighted basket option"
+        |>.bind (fun r => registerInstrumentDescriptor r "credit-default-swap" "Credit default swap")
+        |>.bind (fun r => registerInstrumentDescriptor r "bermudan-put" "Bermudan put (LSMC)")
+        |>.bind (fun r => registerInstrumentDescriptor r "bermudan-call" "Bermudan call (LSMC)")
+        |>.bind (fun r => registerInstrumentDescriptor r "american-put" "American put (LSMC)")
+        |>.bind (fun r => registerInstrumentDescriptor r "american-call" "American call (LSMC)")
       match registry with
       | .ok r =>
           IO.println s!"registered {r.descriptors.size} components"

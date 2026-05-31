@@ -161,7 +161,30 @@
 
 **Execution Status (as of latest session):**
 
-**Phase 1 (Core Duality) — COMPLETE** (pushed as the "hygiene fix in Engine"):
+**Phase 1 (Core Duality) — COMPLETE** (shipped via ccp)
+
+**Phase 3 (Documentation) — Substantially Complete**
+- ADR 007 (`ADR/007-lsmc-instrument-integration.md`) created and accepted. It serves as the central design record for the LSMC integration decisions.
+- CHANGELOG.md enhanced with Phase A hygiene + adoption progress and ADR link.
+- README "Bermudan / American" section significantly expanded: modern `LSMC.Config` examples, legacy shim comparison, DSL syntax, CLI usage (`--engine lsmc`), and strong cross-link to ADR 007.
+- `_tmp/PHASE_A_BLAST_RADIUS.md` brought up to date with current state (DSL, CLI, Python, tests, ADR).
+
+**Next Tranche Active:** Phase 2 (Instrument Adoption) + Phase 3 (Docs/ADR) — "make the new variants feel first-class everywhere" + professional documentation.
+
+**Progress in current session:**
+- Added `Instrument.isEarlyExercise` helper (reduces match duplication).
+- Cleaned up `supportedEngineKeys` logic using the new helper.
+- Added full DSL syntax + macro support for all four early-exercise forms.
+- Updated `LFSE/Test.lean` with new instrument + LSMC tests.
+- Updated Python bindings placeholder to demonstrate bermudan usage.
+- **Created ADR 007** (`ADR/007-lsmc-instrument-integration.md`): Documents the key decisions around `LSMC.Config` as primary type, the legacy shim strategy, `ExerciseStyle` enrichment in the engine, and why we accepted the public API break instead of adapters.
+- **Finalized CLI updates** (`LFSE/CLI/Commands.lean`):
+  - Added `--engine analytic|monte-carlo|lsmc` flag (wired through `evalCmd` using `forceWithEngine`).
+  - `scenarioFromPath` now supports `examples/BermudanOption.lean` with real `bermudanPut`.
+  - `register` command now registers all four new instrument descriptors.
+  - Updated usage text.
+  - Verified: `lake exe lfse eval examples/BermudanOption.lean --engine lsmc` successfully prices a Bermudan put end-to-end.
+- Build and manual CLI smoke tests remain green.
 
 - `EngineParams.lsmc` (and `PricingEngine.lsmc` / `lsmcEngineEntry`) now use the modern `LSMC.Config` as the public type. This is the authoritative structure with `ExerciseStyle`, `BasisFamily`, `ridge`, `antithetic`, etc.
 - Legacy flat `LSMCConfig` + `priceBermudan*` shims in `LFSE/Finance/LSMC.lean` are now a thin, well-documented compatibility layer only. They contain a `legacyConfigToModern` converter and delegate 100% of work to `LSMC.priceBermudan*` / `lsmcPrice`.

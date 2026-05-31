@@ -353,14 +353,39 @@ Phase B (core algorithm correctness per `_plans/001_phase_b_core_lsmc_correctnes
 
 Canonical entry point: `LFSE.Finance.LSMC.Algorithm.lsmcPrice` (and Config-driven helpers). Legacy shims preserved.
 
-Phase A (Instrument variants + Engine integration) is **in progress** (major hygiene milestone achieved).
+Phase A (Instrument variants + Engine integration) is **in progress** (major hygiene milestone achieved; see `ADR/007-lsmc-instrument-integration.md` for the design rationale).
 
 - New first-class `Instrument.bermudanOption` and `Instrument.americanOption` variants have been added.
-- **Engine hygiene complete**: `EngineParams.lsmc` and the LSMC dispatch now use the modern `LSMC.Config` directly. Legacy shim (`LFSE/Finance/LSMC.lean`) is a thin documented compatibility layer only. New instruments receive properly constructed configs with instrument-derived `ExerciseStyle`.
-- They are wired into the registry and both `lsmc` + `monte-carlo` engines.
-- Convenience constructors available via `Finance.Scenario` (`bermudanPut`, `bermudanCall`, `americanPut`, `americanCall`).
-- `examples/BermudanOption.lean` demonstrates real early-exercise pricing via `forceWithEngine` + `PricingEngine.lsmc`.
-- See `_plans/002_phase_a_lsmc_cleanup.md`, `_tmp/PHASE_A_BLAST_RADIUS.md`, and `_tmp/SESSION_2026-05-30_lsmc-engine-hygiene.md` for status and remaining work.
+- **Engine hygiene complete**: `EngineParams.lsmc` (and `PricingEngine.lsmc`) now use the modern `LSMC.Config` as the primary type. The legacy `LFSE/Finance/LSMC.lean` module is a thin, documented compatibility shim only.
+- New instruments receive properly constructed `LSMC.Config` values in the dispatch layer, with `ExerciseStyle` derived from the instrument's exercise dates/steps.
+- Full support added for:
+  - DSL: `bermudanPut("ACME", 100, 1.0, 0.20, [0.25, 0.5, 0.75, 1.0])`, `bermudanCall(...)`, `americanPut(...)`, `americanCall(...)`.
+  - CLI: `lfse eval examples/BermudanOption.lean --engine lsmc --paths 5000`.
+  - Python bindings and test surface now exercise the new paths.
+- Convenience constructors: `Finance.Scenario.bermudanPut`, `bermudanCall`, `americanPut`, `americanCall`.
+- Example: `examples/BermudanOption.lean` + `forceWithEngine scenario (PricingEngine.lsmc { paths := 10000, seed := 42, basis := .laguerre 4, ridge := 1e-8 })`.
+
+**Modern usage (recommended)**
+
+```lean
+let cfg : LSMC.Config := {
+  paths := 8000
+  seed := 123
+  basis := .laguerre 3
+  style := .bermudan #[0.25, 0.5, 0.75, 1.0]
+  ridge := 1e-6
+}
+let result ← forceWithEngine myBermudanScenario (PricingEngine.lsmc cfg)
+```
+
+**Legacy transition path** (still works via the shim)
+
+```lean
+let oldCfg : LSMCConfig := { paths := 8000, seed := 123, exerciseDates := [0.25, 0.5, 0.75, 1.0] }
+-- Delegates internally to the modern Algorithm
+```
+
+See `_plans/002_phase_a_lsmc_cleanup.md`, `ADR/007-lsmc-instrument-integration.md`, `_tmp/PHASE_A_BLAST_RADIUS.md`, and `_tmp/SESSION_2026-05-30_lsmc-engine-hygiene.md` for full status, design decisions, and remaining adoption work.
 
 Canonical entry point for the core algorithm remains `LFSE.Finance.LSMC.Algorithm.lsmcPrice` (and Config-driven helpers).
 

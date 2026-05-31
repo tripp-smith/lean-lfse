@@ -215,6 +215,17 @@ def testAdvancedFinance : IO Unit := do
   let basketNpv ← assertOk "basket npv" (← forceNPV basket)
   assert "basket evaluates" (basketNpv > 0.0)
 
+  -- Phase A: Early-exercise instruments (new first-class variants + LSMC)
+  let bermudan := scenarioOf "bermudan" (Finance.bermudanPut "ACME" 100.0 1.0 0.20 #[0.25, 0.5, 0.75, 1.0])
+  let bermudanNpv ← assertOk "bermudan npv" (← forceNPV bermudan)
+  assert "bermudan positive" (bermudanNpv > 0.0)
+  let bermudanLsmc ← assertOk "bermudan lsmc" (← forceWithEngine bermudan (.lsmc { paths := 2000, seed := 123 }))
+  assert "bermudan lsmc positive" (bermudanLsmc.npv > 0.0)
+
+  let american := scenarioOf "american" (Finance.americanPut "ACME" 100.0 1.0 0.20 50)
+  let americanNpv ← assertOk "american npv" (← forceNPV american)
+  assert "american positive" (americanNpv > 0.0)
+
 def testDataProviderAndServer : IO Unit := do
   let provider : MarketDataProvider := { name := "inline", kind := .csvLike, source := "spot.ACME,123.0\nrate.usd,0.04\n" }
   let ctx ← assertOk "provider context" (← loadMarketProvider provider)

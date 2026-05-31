@@ -105,6 +105,10 @@ def Instrument.registryName : Instrument → String
   | .americanOption .call .. => "american-call"
   | .americanOption .put ..  => "american-put"
 
+def Instrument.isEarlyExercise : Instrument → Bool
+  | .bermudanOption .. | .americanOption .. => true
+  | _ => false
+
 def Instrument.toRegistryEntry (instrument : Instrument) : Registry.InstrumentEntry := {
   descriptor := {
     kind := .instrument,
@@ -113,12 +117,10 @@ def Instrument.toRegistryEntry (instrument : Instrument) : Registry.InstrumentEn
     description := toString (repr instrument)
   },
   implementationKey := "lfse-finance.instrument." ++ instrument.registryName,
-  supportedEngineKeys := match instrument with
-    | .option .call .. => ["analytic", "monte-carlo", "lsmc"]
-    -- Phase A: Early-exercise instruments support full engine set (especially lsmc)
-    | .bermudanOption .. => ["analytic", "monte-carlo", "lsmc"]
-    | .americanOption .. => ["analytic", "monte-carlo", "lsmc"]
-    | _ => ["analytic"],
+  supportedEngineKeys := if instrument.isEarlyExercise || instrument matches .option .call .. then
+      ["analytic", "monte-carlo", "lsmc"]
+    else
+      ["analytic"],
   payoffBuilder := instrument.payoffNode
 }
 

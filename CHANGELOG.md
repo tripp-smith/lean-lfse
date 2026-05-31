@@ -25,8 +25,15 @@
 - `lsmcEngineEntry` now builds properly enriched `LSMC.Config` instances for the new first-class `bermudanOption`/`americanOption` instruments (instrument exercise schedule merged with caller tuning params) and calls the real algorithm directly.
 - Resolved import/qualification friction cleanly. Removed transitional code, broken stubs, and "blocked" comments from the hot paths.
 - Full `lake build && lake test` green + Bermudan example verified.
-- See `_plans/002_phase_a_lsmc_cleanup.md` (Phase 1 marked complete) and `_tmp/SESSION_2026-05-30_lsmc-engine-hygiene.md`.
+- See `_plans/002_phase_a_lsmc_cleanup.md` (Phase 1 marked complete), `ADR/007-lsmc-instrument-integration.md`, and `_tmp/SESSION_2026-05-30_lsmc-engine-hygiene.md`.
 - This puts the framework on a polished foundation for future LSMC functionality.
+
+**Phase A Adoption & Documentation Progress**
+- DSL syntax added for `bermudanCall`/`bermudanPut`/`americanCall`/`americanPut`.
+- CLI extended with `--engine lsmc|monte-carlo|analytic` flag; `BermudanOption.lean` now supported directly; new instruments registered.
+- Python bindings and internal tests updated to use the new instruments.
+- `ADR/007-lsmc-instrument-integration.md` created explaining the `LSMC.Config` type change, legacy shim strategy, `ExerciseStyle` design, and module decisions.
+- README Bermudan/American section significantly expanded with modern vs. legacy examples, DSL, and CLI usage.
 
 ### Developer Workflow
 - Added `clean-commit-push` skill (invoked via `/ccp`).
